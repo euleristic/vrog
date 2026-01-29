@@ -74,7 +74,8 @@ class CompilerRule(BuildRule):
             raise TypeError(f"source {source} should be a string")
         if type(compiler) is not Compiler:
             raise TypeError(f"compiler {compiler} should be a compiler")
-        self.deps = [source]
+        self.source = source
+        self.deps = gen_deps(source, compiler)
         self.compiler = compiler
 
 
@@ -90,8 +91,8 @@ class CompilerRule(BuildRule):
         cmd += [warning_option + warning for warning in self.compiler.warnings]
         cmd += [definition_option + definition for definition in self.compiler.definitions]
         cmd += self.compiler.extra_args
-        cmd += self.deps
         cmd += ["-o", target]
+        cmd.append(self.source)
         subprocess.run(cmd)
 
 
@@ -127,7 +128,7 @@ class LinkerRule(BuildRule):
 
         objects
           The object file to link.
-        compiler
+        linker
           The linker to invoke.
         """
         if type(objects) is not list:
@@ -171,6 +172,25 @@ class CleanRule(BuildRule):
             if os.path.exists(file):
                 print(f"rm {file}")
                 os.remove(file)
+
+
+def gen_deps(
+    source: str,
+    compiler: Compiler=Compiler(),
+) -> list[str]:
+    """Generates the list of dependencies of an object file"
+
+    source
+      The source of the object file.
+    compiler
+      The compiler that generates the dependency list.
+    """
+    cmd = [compiler.compiler, "-MM", "-MP"]
+    cmd += [definition_option + definition for definition in compiler.definitions]
+    cmd += compiler.extra_args
+    cmd.append(source)
+    make_rules = subprocess.run(cmd, capture_output=True, text=True).stdout
+    return make_rules.replace("\\\n", "").splitlines()[0].split()[1:]
 
 
 class BuildSystem:
